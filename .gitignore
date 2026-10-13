@@ -4,3 +4,11 @@ __pycache__/
 venv/
 .env
 *.log
+.worktrees/
+
+# 个人笔记 / 运行产物（不公开）
+学习笔记.md
+项目想法.md
+memory.md
+简历技能草稿.md
+eval-*/

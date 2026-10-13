@@ -1,5 +1,5 @@
 from agent.tools.base import Tool, register
-
+from agent.workdir import resolve
 # 这是让 agent 写文件的 tool，覆盖写入，文件不存在则创建
 
 name = "write_file"
@@ -22,7 +22,7 @@ parameters = {
 # 使用w写入操作并记录多少个字符的内容已经写入
 def write_file(path, content):
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(resolve(path), "w", encoding="utf-8") as f:
             f.write(content)
         return f"已写入 {len(content)} 个字符到 {path}"
     except OSError as e:

@@ -1,4 +1,5 @@
 from agent.tools.base import Tool, register
+from agent.workdir import resolve
 
 # 这是让agent读文件的tool，需要写tool四件套，并且其中的execute负责执行
 
@@ -24,7 +25,7 @@ def read_file(path):
     # 2. except: 捕获读文件可能出的错,return 一段错误说明字符串
     #    - 想想:该 except 哪个/哪些异常类型?
     try:
-        with open(path, "r", encoding="UTF-8",) as f:
+        with open(resolve(path), "r", encoding="UTF-8",) as f: # resolve 的作用:把工具收到的路径,改写成"落在【本线程工作目录】下"的完整路径,为子agent服务的
             return f.read()
     except OSError as e: return f"读取失败:{e}"
 

@@ -7,8 +7,10 @@
 """
 
 import os
+import contextvars
 from agent.hooks import register_hook
 from datetime import datetime
+from agent.workdir import get_cwd, resolve
 
 def audit_pre(context):
     print(f"[hook] 即将调用工具:{context['name']}  参数:{context['args']}")
@@ -29,9 +31,10 @@ WORKDIR = os.path.realpath(".")   # 工作目录的真实绝对路径（启动�
 def sandbox_pre(context):
     args = context["args"]
     if "path" in args:
-        target = os.path.realpath(args["path"])
+        root = os.path.realpath(get_cwd())              # 允许根 = 当前线程工作目录
+        target = os.path.realpath(resolve(args["path"])) # 目标也落到工作目录下再取真实路径
         # WORKDIR + os.sep 是“在工作目录内”的前缀；不是 WORKDIR 本身、也不以该前缀开头 → 目录外 → 拦截, os.sep精确定义"在里面"的边界, 名字像、其实在外面"的目录不被误判成"里面" → 正确拦截。
-        if target != WORKDIR and not target.startswith(WORKDIR + os.sep):
+        if target != root and not target.startswith(root + os.sep):
             return f"路径越界被拦截:{args['path']}"
     return None    # 没有 path 参数，或路径合法 → 放行
 
@@ -39,8 +42,11 @@ def sandbox_pre(context):
 NEEDS_CONFIRM = {"write_file", "edit_file", "bash"}   # 高危工具集合（会改动/执行）
 
 # ---- 确认开关（A：会话级自动批准；D：子 agent 内不确认）----
-_auto_approve = False   # A：/auto 切换。True = 本会话不再弹确认
-_in_subagent = False    # D：run_subagent 期间为 True，子任务内的操作不弹确认
+_auto_approve = False   # A：/auto 切换。True = 本会话不再弹确认（会话级，普通全局）
+# D：run_subagent 期间为 True，子任务内的操作不弹确认。
+# 用 ContextVar 而非普通全局：并行时每个子 agent 线程各持一份，互不踩
+# （否则一个线程跑完把全局设回 False，会害得其它还在跑的线程误弹确认）。
+_in_subagent = contextvars.ContextVar("in_subagent", default=False)
 
 
 def set_auto_approve(on):
@@ -53,12 +59,11 @@ def is_auto_approve():
 
 
 def set_in_subagent(on):
-    global _in_subagent
-    _in_subagent = on
+    _in_subagent.set(on)          # ContextVar 用 .set()，每线程独立，不用 global
 
 
 def confirm_pre(context):
-    if _auto_approve or _in_subagent:    # A 或 D 命中 → 跳过确认，直接放行
+    if _auto_approve or _in_subagent.get():   # A 或 D 命中 → 跳过确认，直接放行（D 用 .get() 读本线程的值）
         return None
     if context["name"] in NEEDS_CONFIRM:
         ans = input(f"⚠️  确认执行 {context['name']} {context['args']}? [y/N] ")

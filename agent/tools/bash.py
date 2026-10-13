@@ -1,4 +1,5 @@
 from agent.tools.base import Tool, register
+from agent.workdir import get_cwd
 import subprocess
 # bash 可以让agent执行shell命令，需要瞬间完成，command就是要执行的命令
 
@@ -34,6 +35,7 @@ def bash(command):
             capture_output=True,   # 捕获 stdout 和 stderr
             text=True,             # 输出按字符串返回(不是 bytes)
             timeout=30,            # 秒数;超时会抛 subprocess.TimeoutExpired
+            cwd = get_cwd()        # 让命令在当前的工作目录跑
         )
         # result.stdout / result.stderr / result.returncode 三样你都能拿到,分别是正常输出，错误输出和退出码
     except subprocess.TimeoutExpired:

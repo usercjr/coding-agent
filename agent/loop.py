@@ -3,10 +3,15 @@ import json
 from openai import OpenAI
 import agent.tools               # ← 触发所有工具注册
 from agent.tools import base
-from agent.tools.load_skill import available_skills_text   # 扫描 skills/ 生成简介清单
+from agent.tools.load_skill import available_skills_text, load_skill   # 扫描简介 / 读 skill 正文
 from agent.tools.remember import load_memory               # 读 memory.md 跨会话记忆
 from agent import hooks
 from agent.default_hooks import set_in_subagent    # D：子 agent 内不确认
+from concurrent.futures import ThreadPoolExecutor
+import subprocess
+from agent.workdir import set_cwd
+import time  
+
 
 # agent 调用主流程，main 调用 run()
 
@@ -22,8 +27,9 @@ client = OpenAI(
 ALLOWED_TOOLS = {
     "read_file", "write_file", "edit_file", "bash", "glob", "grep", "load_skill",
     "remember",            # 跨会话记忆工具
-    "dispatch",            # 派子任务给子 agent
-    "echo", "get-sum",     # 从 13 个 MCP 工具里只留这两个有用的
+    "dispatch",            # 派1个子任务给子 agent，同步把他跑完
+    "dispatch_parallel",   # 派一批子任务给多个agent，多线程同时跑，调 run_subagent(task)	
+    "echo", "get-sum",     # 从 13 个 MCP 工具里只留这两个有用的，调 run_parallel(tasks)→内部对每个 task 并发调 run_subagent
 }
 
 # 子 agent 可用工具：不含 dispatch(防无限套娃)、不含 remember(子 agent 不写长期记忆)
@@ -42,6 +48,21 @@ system_prompt = (
     "当用户确立了项目约定/重要决策/方案，或明确要你记住某事时，用 remember 工具存入记忆。"
 )
 messages = [{"role": "system", "content": system_prompt}]
+
+
+# ---------- 教学模式开关（模块 8：/teach 切换，开启时把教学 playbook 注入 system）----------
+_teach = False
+
+
+def set_teach(on):
+    global _teach
+    _teach = on
+    # 开 → 原 system_prompt + 教学 playbook 正文；关 → 恢复原 system_prompt
+    messages[0]["content"] = system_prompt + ("\n\n" + load_skill("teaching") if on else "")
+
+
+def is_teach():
+    return _teach
 
 # ---------- 上下文压缩 ----------
 MAX_CONTEXT_CHARS = 8000   # 超过这个长度就压缩（学习用字符数粗估，非真实 token）
@@ -164,3 +185,34 @@ def run_subagent(task):
         set_in_subagent(False)
     # 3. return 它的结果（不 print——结果要交回主 agent，不是给用户看）
     return result
+
+def run_parallel(tasks):
+    # tasks 是一串子任务描述(list of str)
+    # 用 ThreadPoolExecutor 并发跑 run_subagent,收集所有结果
+    # 返回结果列表(可以拼成一段文本,标明第几个任务的结果)
+
+    n = min(len(tasks),5) # 可以最多执行多少个tasks
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        # pool.map(fn, 列表1, 列表2) → 并发调 fn(列表1[i], 列表2[i])
+        results = list(pool.map(_run_in_worktree, range(len(tasks)), tasks))
+        # 拼成"任务i结果:..."的形式,便于主 agent/用户看清哪个是哪个
+    return "\n\n".join(f"【任务{i+1}】{r}" for i, r in enumerate(results))
+
+def _run_in_worktree(i, task):
+    branch = f"task-{int(time.time())}-{i}"
+    wt = f".worktrees/{branch}"
+    # 1. 建 worktree(新分支 branch,目录 wt)——git 命令:
+    r = subprocess.run(["git","worktree","add","-b",branch,wt], capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"建 worktree 失败:{r.stderr}"   # 不继续 set_cwd/跑子agent
+    
+    # 2. 把本线程的工作目录设成这个 worktree(用它的真实绝对路径)
+    set_cwd(os.path.realpath(wt))
+    # 3. 跑子 agent
+    result = run_subagent(task)
+    # 4. return 结果 + 标明改动在哪(便于人审)
+    return f"{result}\n(改动在分支 {branch} / 目录 {wt})"
+
+
+
+

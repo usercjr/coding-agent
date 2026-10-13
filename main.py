@@ -1,4 +1,4 @@
-from agent.loop import run
+from agent.loop import run, set_teach, is_teach
 from agent.mcp_client import load_mcp_tools
 import agent.default_hooks          # import 即注册示例钩子（审计 + 安全）
 from agent.default_hooks import set_auto_approve, is_auto_approve
@@ -22,9 +22,13 @@ def handle_slash(user_input):
         print("  /help          显示本帮助")
         print("  /review <文件>  审查指定文件的代码")
         print("  /auto          切换自动批准（开=不再弹确认）")
+        print("  /teach         切换教学模式（开=当陪练导师，不代写）")
     elif cmd == "auto":
         set_auto_approve(not is_auto_approve())          # 切换开关
         print(f"自动批准已{'开启（不再弹确认）' if is_auto_approve() else '关闭'}")
+    elif cmd == "teach":
+        set_teach(not is_teach())                        # 切换教学模式
+        print("教学模式已" + ("开启（我会当陪练导师，不直接代写）" if is_teach() else "关闭"))
     elif cmd in COMMANDS:
         # prompt 宏：查表 → 展开 → 进模型
         prompt = COMMANDS[cmd].format(arg=arg)

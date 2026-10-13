@@ -1,5 +1,5 @@
 from agent.tools.base import Tool, register
-
+from agent.workdir import resolve
 # 这是对文件的部分内容进行编辑，把原文的一段精确替换为新的内容
 
 name = "edit_file"
@@ -24,7 +24,7 @@ parameters = {
 
 def edit_file(path, old_string, new_string):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(resolve(path), "r", encoding="utf-8") as f:
             content = f.read()
     except OSError as e:
         return f"修改失败:{e}"
@@ -37,7 +37,7 @@ def edit_file(path, old_string, new_string):
 
     new_content = content.replace(old_string, new_string)
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(resolve(path), "w", encoding="utf-8") as f:
             f.write(new_content)
     except OSError as e:
         return f"错误:无法写入文件 {path}: {e}"

@@ -4,4 +4,4 @@
 base 会被各工具模块 `from agent.tools.base import ...` 带着自动加载，无需单独导入。
 """
 
-from . import read_file, write_file, edit_file, bash, glob, grep, load_skill, remember, dispatch
+from . import read_file, write_file, edit_file, bash, glob, grep, load_skill, remember, dispatch, dispatch_parallel
