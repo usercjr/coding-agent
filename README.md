@@ -53,6 +53,16 @@ python -m eval.run_eval
 
 对评测集逐题运行代理（隔离临时环境）→ 执行验证 / LLM-as-Judge 判定 → 打印任务成功率。
 
+## 📚 开发文档
+
+设计决策与开发过程都记录在 [`docs/`](docs/) 里，换台电脑 clone 下来也能看到「当时为什么这么改」：
+
+- [`docs/00-INDEX.md`](docs/00-INDEX.md) — 文档索引
+- [`docs/DEVLOG.md`](docs/DEVLOG.md) — 变更日志（每次开发动了哪些文件、留了什么坑）
+- [`docs/01-gap-analysis.md`](docs/01-gap-analysis.md) — 现状盘点与应用性缺口
+- [`docs/02-design-learning-features.md`](docs/02-design-learning-features.md) — 代码学习能力设计方案与 trade-off
+- [`docs/03-implementation-checklist.md`](docs/03-implementation-checklist.md) — 分步实施清单与自检题
+
 ## 🛠 技术栈
 
 Python · OpenAI 兼容 API（DeepSeek）· MCP · Git Worktree · threading / contextvars · subprocess · ReAct · LLM-as-Judge
