@@ -1,10 +1,64 @@
-# 实施清单（MVP：S1 + S2 + S4）
+# 实施清单（MVP：S7 + S1 + S2 + S4）
 
 > 用法：对着做，每完成一步勾一个框。
 > **代码自己写**；卡住了就按「提示阶梯」一层一层问，不要一上来就要答案。
 >
 > 提示阶梯：`给方向` → 自己再试 → `给伪代码/签名` → 自己再试 → `给真实代码`
 > （两次为限，见 `CLAUDE.md`）
+
+---
+
+## Step 0 · `/ask` 随问随答（S7）—— 先做这个
+
+> 工作量最小、每天都用得上，而且 `pydoc_lookup` 这个工具后面 S2/S3 都会复用。
+
+### 0.1 `pydoc_lookup` 工具
+
+- [ ] 新建 `agent/tools/pydoc_lookup.py`，四件套照抄 `agent/tools/grep.py` 的结构
+- [ ] 在 `agent/tools/__init__.py` 和 `agent/loop.py::ALLOWED_TOOLS` 里各加一处注册
+- [ ] 实现 `_resolve(target)`：把 `"contextvars.ContextVar"` 解析成真正的对象
+      —— **必须用 `importlib` + `getattr` 逐段取，严禁 `eval`/`exec`**
+- [ ] 实现 `pydoc_lookup(target)`：返回真实签名（`inspect.signature`）+ docstring（`inspect.getdoc`）
+- [ ] 查不到时返回明确的「查不到 + 原因」，**不要返回空串**（空串会让模型开始编）
+
+**验收**：
+```
+pydoc_lookup("contextvars.ContextVar")  → 能看到真实的类签名和官方 docstring
+pydoc_lookup("dict.setdefault")         → 能看到 setdefault 的 docstring
+pydoc_lookup("不存在的东西")             → 明确告诉你查不到，而不是空白
+pydoc_lookup("os.path.join")            → 能正确穿过「模块.模块.函数」三段
+```
+
+**坑提醒**：
+- `inspect.signature` 对 C 实现的内置函数（如 `dict.setdefault`）可能抛 `ValueError`
+  —— 要兜住，docstring 还是能拿到的
+- `**args` 解包、列表推导式这类**语法糖**根本不是对象，`_resolve` 查不到是正常的
+  → 这种情况应该优雅降级，让模型用自己的知识回答，并**标注「以下来自模型知识，非本地查证」**
+
+### 0.2 `/ask` 入口 + 回答规范
+
+- [ ] 新建 `skills/asking/SKILL.md`：写死 L1 一句话 → L2 解决什么问题 →
+      L3 本项目真实用例（带 `文件:行号`）→ L4 常见坑，并明确 **一次给完，不要反问**
+- [ ] skill 里要求：先调 `pydoc_lookup` 拿事实，再调 `grep` 搜本项目用例
+- [ ] 在 `main.py` 的 `COMMANDS` 里加 `"ask"`，并在 `/help` 补上
+- [ ] **解决「教学模式反问」冲突**（见 `docs/02` S7 动手前想清楚第 1 题）
+
+**验收**（这条最关键）：
+1. 开着 `/teach`，执行 `/ask contextvars.ContextVar`
+2. agent 必须**直接给答案，不能反问「你觉得呢」**
+3. 回答里必须出现 `agent/workdir.py` 这个**本项目的真实用例**
+4. 再执行一次普通的概念提问（比如「为什么子 agent 要独立 messages」），
+   agent 应该**恢复反问引导** —— 证明 `/ask` 的例外是**局部的**，没有把教学模式整个关掉
+
+> 第 4 条是真正的难点。如果你的实现把教学模式**永久**关掉了，那就是 bug。
+
+### 自检题（做完回答）
+1. 你用哪种方式让 `/ask` 压过了 teaching skill 的反问规则？
+   另外两种方式分别会在什么情况下失效？
+2. 为什么 `_resolve` 不能用 `eval(target)`？把这件事和 `agent/default_hooks.py`
+   的 5 层限权联系起来说一说。
+3. `pydoc_lookup` 查不到时，为什么**返回「查不到」比返回空串重要**？
+   （提示：想想模型拿到空串会干什么）
 
 ---
 
